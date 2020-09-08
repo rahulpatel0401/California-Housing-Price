@@ -16,6 +16,12 @@ import pandas as pd
 import matplotlib.image as mpimg
 from sklearn.model_selection import train_test_split, StratifiedShuffleSplit
 from pandas.plotting import scatter_matrix
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OrdinalEncoder, OneHotEncoder, StandardScaler
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.linear_model import LinearRegression
 
 %matplotlib inline
 import matplotlib as mpl
@@ -167,4 +173,86 @@ housing.describe()
 
 # prepare data for machine learning algorithms --------------------------------
 housing = strat_train_set.drop('median_house_value', axis=1)
-housing_labels = strat_train_set['median_house_vaues'].copy()
+housing_labels = strat_train_set['median_house_value'].copy()
+
+sample_incomplete_rows = housing[housing.isnull().any(axis=1)].head()
+sample_incomplete_rows
+
+imputer = SimpleImputer(strategy='median')
+housing_num = housing.drop('ocean_proximity', axis=1)
+imputer.fit(housing_num)
+imputer.statistics_
+housing_num.median().values
+
+# transform the training set
+X = imputer.transform(housing_num)
+housing_tr = pd.DataFrame(X, columns=housing_num.columns, index=housing.index)
+housing_tr.loc[sample_incomplete_rows.index.values]
+imputer.strategy
+housing_tr = pd.DataFrame(X, columns=housing_num.columns, index=housing_num.index)
+housing_tr.head()
+
+# preprocess categorical variable
+housing_cat = housing[['ocean_proximity']]
+housing_cat.head()
+
+ordinal_encoder = OrdinalEncoder()
+housing_cat_encoded = ordinal_encoder.fit_transform(housing_cat)
+housing_cat_encoded[:10]
+ordinal_encoder.categories_
+
+cat_encoder = OneHotEncoder(sparse=False)
+housing_cat_1hot = cat_encoder.fit_transform(housing_cat)
+housing_cat_1hot
+cat_encoder.categories_
+
+# create custom transformer to add extra attribute
+rooms_ix, bedrooms_ix, population_ix, households_ix = 3, 4, 5, 6
+class CombinedAttributesAdder(BaseEstimator, TransformerMixin):
+    def __init__(self, add_bedrooms_per_room = True):
+        self.add_bedrooms_per_room = add_bedrooms_per_room
+    def fit(self, X, y=None):
+        return self
+    def transform(self, X):
+        rooms_per_household = X[:, rooms_ix] / X[:, households_ix]
+        population_per_household = X[:, population_ix] / X[:, households_ix]
+        if self.add_bedrooms_per_room:
+            bedrooms_per_room = X[:, bedrooms_ix] / X[:, rooms_ix]
+            return np.c_[X, rooms_per_household, population_per_household,
+                         bedrooms_per_room]
+        else:
+            return np.c_[X, rooms_per_household, population_per_household]
+
+attr_adder = CombinedAttributesAdder(add_bedrooms_per_room=False)
+housing_extra_attributes = attr_adder.transform(housing.values)
+
+housing_extra_attributes = pd.DataFrame(
+    housing_extra_attributes,
+    columns=list(housing.columns) + ['rooms_per_household', 
+                                     'population_per_household'],
+    index = housing.index)
+housing_extra_attributes.head()
+
+# build a pipeline to preprocess numerical attributes
+num_pipeline = Pipeline([
+    ('imputer', SimpleImputer(strategy='median')),
+    ('attributes_adder', CombinedAttributesAdder()),
+    ('std_scaler', StandardScaler())])
+
+housing_num_tr = num_pipeline.fit_transform(housing_num)
+housing_num_tr
+
+num_attributes = list(housing_num)
+cat_attributes = ['ocean_proximity']
+
+full_pipeline = ColumnTransformer([
+    ('num', num_pipeline, num_attributes),
+    ('cat', OneHotEncoder(), cat_attributes)])
+
+housing_prepared = full_pipeline.fit_transform(housing)
+
+housing_prepared.shape
+
+# select and train model ------------------------------------------------------
+lin_reg = LinearRegression()
+lin_reg.fit(housing_prepared, housing_labels)
