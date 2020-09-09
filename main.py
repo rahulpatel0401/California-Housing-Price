@@ -256,3 +256,6 @@ housing_prepared.shape
 # select and train model ------------------------------------------------------
 lin_reg = LinearRegression()
 lin_reg.fit(housing_prepared, housing_labels)
+
+# lets try for some data
+some_data = housing.iloc[:5]
