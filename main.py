@@ -39,7 +39,7 @@ mpl.rc('xtick', labelsize=12)
 mpl.rc('ytick', labelsize=12)
 
 # where to save the figures
-PROJECT_ROOT_DIR = r"C:\Users\RAHUL\Documents\California-Housing-Price"
+PROJECT_ROOT_DIR = r"C:\Users\"
 PROJECT_ID = "housing_price_prediction"
 IMAGE_PATH = os.path.join(PROJECT_ROOT_DIR, 'image', PROJECT_ID)
 os.makedirs(IMAGE_PATH,exist_ok=True)
